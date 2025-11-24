@@ -25,8 +25,8 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave, onRes
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300 scale-100 animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">Match Settings</h3>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
@@ -144,10 +144,9 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave, onRes
           <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
              <button 
                onClick={() => {
-                   if(confirm("Are you sure you want to reset the entire match?")) {
-                       onReset();
-                       onClose();
-                   }
+                   // Directly trigger parent Reset logic which opens the confirmation modal
+                   onClose();
+                   onReset();
                }}
                className="w-full py-3 text-red-600 dark:text-red-500 border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-900/20 rounded font-bold transition-colors"
              >

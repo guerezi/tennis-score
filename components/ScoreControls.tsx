@@ -48,13 +48,6 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
 
   const serveSide = getServeSide();
 
-  // Helper to get game score for a set index
-  const getGameScore = (setIndex: number) => {
-      if (setIndex > state.sets.length - 1) return "";
-      const set = state.sets[setIndex];
-      return `${set[PlayerId.P1]} - ${set[PlayerId.P2]}`;
-  };
-
   return (
     <div className="flex-1 flex flex-col relative">
       
@@ -75,8 +68,8 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
       </div>
 
       {/* Match Scoreboard Strip - Improved Visibility */}
-      <div className="bg-slate-50 dark:bg-slate-950 py-3 border-b border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex justify-center items-center gap-6">
+      <div className="bg-slate-50 dark:bg-slate-950 py-3 border-b border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+          <div className="flex justify-center items-center gap-6 relative z-10">
               {/* Previous Sets */}
               {state.currentSetIndex > 0 && (
                   <div className="flex gap-4 text-slate-400 dark:text-slate-500 text-sm font-mono font-bold">
@@ -105,17 +98,26 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
           </div>
       </div>
 
-      {/* Switch Side Notification Overlay */}
+      {/* Switch Side Prominent Indicator */}
       {showSwitch && !state.isMatchOver && (
-          <div className="bg-yellow-400 dark:bg-yellow-500 text-black font-bold text-center py-2 animate-pulse shadow-lg z-20 mx-4 rounded-lg my-2 flex items-center justify-center gap-2">
-              <RefreshCcw size={20} /> SWITCH SIDES
+          <div className="absolute top-[80px] left-0 right-0 z-30 flex justify-center pointer-events-none">
+              <div className="bg-yellow-400 dark:bg-yellow-500 text-black px-6 py-2 rounded-full font-black text-sm uppercase tracking-widest shadow-xl flex items-center gap-3 animate-bounce">
+                  <RefreshCcw size={18} className="animate-spin-slow" />
+                  <span>Switch Ends</span>
+                  <RefreshCcw size={18} className="animate-spin-slow" />
+              </div>
           </div>
       )}
 
       {/* Service Indicator (Central) */}
       {!state.isMatchOver && (
-        <div className="flex justify-center mt-2">
-           <div className="bg-white/50 dark:bg-slate-800/50 backdrop-blur text-slate-600 dark:text-slate-300 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+        <div className="flex justify-center mt-4">
+           <div className={`
+             backdrop-blur text-slate-600 dark:text-slate-300 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 border transition-all duration-300
+             ${showSwitch 
+                ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700/50 opacity-50 scale-90' 
+                : 'bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'}
+           `}>
               <span className="text-slate-400 dark:text-slate-500">Serve</span>
               <span className="text-slate-900 dark:text-white flex items-center gap-1">
                  {serveSide === 'Right (Deuce)' ? 'Right' : 'Left'}
