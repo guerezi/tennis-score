@@ -13,8 +13,6 @@
         theme: {
           extend: {
             colors: {
-              p1: '#3b82f6',
-              p2: '#ef4444',
               dark: '#0f172a',
               card: '#1e293b',
             },
@@ -36,12 +34,13 @@
       body { overscroll-behavior: none; transition: background-color 0.3s, color 0.3s; }
       @media (prefers-color-scheme: dark) { body { background-color: #0f172a; color: white; } }
       @media (prefers-color-scheme: light) { body { background-color: #f8fafc; color: #0f172a; } }
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
     </style>
 
     <!-- Babel for in-browser compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Import Map: STRICTLY PINNED VERSIONS TO AVOID CONFLICTS -->
+    <!-- Import Map -->
     <script type="importmap">
 {
   "imports": {
@@ -62,7 +61,7 @@
       import React, { useState, useEffect, useRef } from 'react';
       import { createRoot } from 'react-dom/client';
       import { 
-        Undo2, Settings, Trophy, RefreshCcw, RotateCcw, AlertTriangle, X, Save 
+        Undo2, Settings, Trophy, RefreshCcw, RotateCcw, AlertTriangle, X, Save, Circle, Clock, ChevronDown
       } from 'lucide-react';
 
       // --- TYPES & CONSTANTS ---
@@ -71,9 +70,98 @@
         P2: 'P2',
       };
 
+      const COLORS = {
+        blue: { 
+            name: 'Blue', 
+            primary: 'bg-blue-600', 
+            hover: 'hover:bg-blue-500',
+            gradient: 'from-blue-500 to-blue-600',
+            cardGradient: 'from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-900',
+            text: 'text-blue-600', 
+            border: 'border-blue-600',
+            borderLight: 'border-blue-200',
+            dot: 'bg-blue-500',
+            light: 'bg-blue-50',
+            darkBg: 'dark:bg-blue-900/40',
+            shadow: 'shadow-blue-500/20'
+        },
+        red: { 
+            name: 'Red', 
+            primary: 'bg-red-600', 
+            hover: 'hover:bg-red-500',
+            gradient: 'from-red-500 to-red-600',
+            cardGradient: 'from-red-50 to-white dark:from-red-900/20 dark:to-slate-900',
+            text: 'text-red-600', 
+            border: 'border-red-600',
+            borderLight: 'border-red-200',
+            dot: 'bg-red-500',
+            light: 'bg-red-50',
+            darkBg: 'dark:bg-red-900/40',
+            shadow: 'shadow-red-500/20'
+        },
+        green: { 
+            name: 'Green', 
+            primary: 'bg-emerald-600', 
+            hover: 'hover:bg-emerald-500',
+            gradient: 'from-emerald-500 to-emerald-600',
+            cardGradient: 'from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-900',
+            text: 'text-emerald-600', 
+            border: 'border-emerald-600',
+            borderLight: 'border-emerald-200',
+            dot: 'bg-emerald-500',
+            light: 'bg-emerald-50',
+            darkBg: 'dark:bg-emerald-900/40',
+            shadow: 'shadow-emerald-500/20'
+        },
+        orange: { 
+            name: 'Orange', 
+            primary: 'bg-orange-600', 
+            hover: 'hover:bg-orange-500',
+            gradient: 'from-orange-500 to-orange-600',
+            cardGradient: 'from-orange-50 to-white dark:from-orange-900/20 dark:to-slate-900',
+            text: 'text-orange-600', 
+            border: 'border-orange-600',
+            borderLight: 'border-orange-200',
+            dot: 'bg-orange-500',
+            light: 'bg-orange-50',
+            darkBg: 'dark:bg-orange-900/40',
+            shadow: 'shadow-orange-500/20'
+        },
+        purple: { 
+            name: 'Purple', 
+            primary: 'bg-purple-600', 
+            hover: 'hover:bg-purple-500',
+            gradient: 'from-purple-500 to-purple-600',
+            cardGradient: 'from-purple-50 to-white dark:from-purple-900/20 dark:to-slate-900',
+            text: 'text-purple-600', 
+            border: 'border-purple-600',
+            borderLight: 'border-purple-200',
+            dot: 'bg-purple-500',
+            light: 'bg-purple-50',
+            darkBg: 'dark:bg-purple-900/40',
+            shadow: 'shadow-purple-500/20'
+        },
+        pink: { 
+            name: 'Pink', 
+            primary: 'bg-pink-600', 
+            hover: 'hover:bg-pink-500',
+            gradient: 'from-pink-500 to-pink-600',
+            cardGradient: 'from-pink-50 to-white dark:from-pink-900/20 dark:to-slate-900',
+            text: 'text-pink-600', 
+            border: 'border-pink-600',
+            borderLight: 'border-pink-200',
+            dot: 'bg-pink-500',
+            light: 'bg-pink-50',
+            darkBg: 'dark:bg-pink-900/40',
+            shadow: 'shadow-pink-500/20'
+        },
+      };
+
       const DEFAULT_CONFIG = {
         p1Name: "Player 1",
         p2Name: "Player 2",
+        p1Color: "blue",
+        p2Color: "red",
         setsToWin: 2, // Best of 3
         useAdvantage: false, // Default to No-Ad
         finalSetType: 'superTieBreak', // Default to Super Tie Break
@@ -99,8 +187,8 @@
         games: { [PlayerId.P1]: 0, [PlayerId.P2]: 0 },
         points: { [PlayerId.P1]: "0", [PlayerId.P2]: "0" },
         isTieBreak: false,
-        server: PlayerId.P1,
-        isSecondServe: false,
+        server: PlayerId.P1, // Always start with P1
+        tieBreakStarter: null, 
         shouldSwitchSides: false,
         history: [],
       });
@@ -129,9 +217,13 @@
           const newWinnerScore = state.points[winner];
           const newLoserScore = state.points[loser];
           
-          let target = state.config.tieBreakPoints;
+          // Server Rotation in Tie Break
+          const totalPoints = state.points[PlayerId.P1] + state.points[PlayerId.P2];
+          if (totalPoints % 2 !== 0) {
+              state.server = getOtherPlayer(state.server);
+          }
           
-          // Check for Super Tie Break Set (Decider)
+          let target = state.config.tieBreakPoints;
           const isDeciderSet = state.currentSetIndex === (state.config.setsToWin * 2 - 2);
           if (state.config.finalSetType === 'superTieBreak' && isDeciderSet) {
               target = 10;
@@ -175,7 +267,13 @@
 
           if (wasTieBreak) {
               setWon = true;
+              if (state.tieBreakStarter) {
+                  state.server = getOtherPlayer(state.tieBreakStarter);
+                  state.tieBreakStarter = null;
+              }
           } else {
+              state.server = getOtherPlayer(state.server);
+
               const wGames = state.games[winner];
               const lGames = state.games[loser];
               const tbAt = state.config.tieBreakAt;
@@ -183,6 +281,7 @@
               if (wGames === tbAt && lGames === tbAt) {
                  state.isTieBreak = true;
                  state.points = { [PlayerId.P1]: 0, [PlayerId.P2]: 0 };
+                 state.tieBreakStarter = state.server; 
               } 
               else if (wGames === tbAt && lGames <= tbAt - 2) {
                  setWon = true;
@@ -219,6 +318,7 @@
                 state.currentSetIndex === (state.config.setsToWin * 2 - 2)) {
                 state.isTieBreak = true;
                 state.points = { [PlayerId.P1]: 0, [PlayerId.P2]: 0 };
+                state.tieBreakStarter = state.server;
             }
           }
         }
@@ -279,6 +379,13 @@
 
         const lastEvent = newHistory[newHistory.length - 1];
         const snapshot = lastEvent.scoreSnapshot;
+        
+        // Restore server heuristic
+        let s = state.server;
+        const type = lastEvent.type;
+        if (type === 'GAME_WIN' && !snapshot.isTieBreak) {
+             s = getOtherPlayer(s);
+        }
 
         return {
           ...state,
@@ -290,7 +397,8 @@
           isMatchOver: false,
           winner: undefined,
           currentSetIndex: snapshot.sets.length - 1,
-          shouldSwitchSides: lastEvent.sideSwitchAfter
+          shouldSwitchSides: lastEvent.sideSwitchAfter,
+          server: s 
         };
       };
 
@@ -299,6 +407,9 @@
       // MatchHistory Component
       const MatchHistory = ({ history, config, p1Color, p2Color }) => {
         const scrollRef = useRef(null);
+        
+        const p1C = COLORS[p1Color] || COLORS.blue;
+        const p2C = COLORS[p2Color] || COLORS.red;
 
         useEffect(() => {
           if (scrollRef.current) {
@@ -346,13 +457,8 @@
         }
 
         return (
-          <div className="w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 transition-colors duration-300">
-            <div className="px-4 py-2 text-xs font-mono text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 flex justify-between">
-              <span>Match Timeline</span>
-              <span>{history.length} Events</span>
-            </div>
-            
-            <div ref={scrollRef} className="flex overflow-x-auto p-4 items-center space-x-2 no-scrollbar h-48">
+          <div className="w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 transition-colors duration-300 pb-safe">
+            <div className="flex overflow-x-auto px-2 py-1 items-end space-x-1 no-scrollbar min-h-[4.5rem]" ref={scrollRef}>
               {rounds.map((round, idx) => {
                 const showSetDivider = idx > 0 && rounds[idx - 1].setIndex !== round.setIndex;
                 const previousSetIndex = showSetDivider ? rounds[idx-1].setIndex : 0;
@@ -360,63 +466,57 @@
                 return (
                 <React.Fragment key={idx}>
                   {showSetDivider && (
-                     <div className="flex flex-col justify-center items-center mx-4 h-32 relative group/divider">
+                     <div className="flex flex-col justify-end items-center mx-1 h-14 relative group/divider pb-1">
                          <div className="h-full w-px bg-slate-300 dark:bg-slate-600"></div>
-                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-[10px] font-bold py-1 px-3 rounded-full border border-slate-600 dark:border-slate-300 whitespace-nowrap z-10 shadow-md">
+                         <div className="absolute top-0 bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 text-[8px] font-bold py-0.5 px-1.5 rounded-sm whitespace-nowrap z-10 shadow-sm">
                             SET {previousSetIndex + 1}
                          </div>
                      </div>
                   )}
 
-                  <div className="flex flex-col min-w-[60px] relative group h-full justify-end pb-2">
+                  <div className="flex flex-col relative group justify-end pb-1 h-16">
                     {idx === 0 && (
-                       <div className="absolute -top-6 left-0 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider w-full text-center">
+                       <div className="absolute -top-3 left-0 text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase w-full text-center">
                           Set {round.setIndex + 1}
                        </div>
                     )}
                     <div className={`
-                      flex flex-col items-center justify-between h-32 w-16 rounded-md border shadow-sm
+                      flex flex-col items-center justify-between w-12 h-14 rounded border shadow-sm
                       ${round.winner === PlayerId.P1 
-                          ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-500/30' 
+                          ? `${p1C.light} ${p1C.borderLight} dark:${p1C.darkBg}` 
                           : round.winner === PlayerId.P2 
-                            ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-500/30' 
+                            ? `${p2C.light} ${p2C.borderLight} dark:${p2C.darkBg}` 
                             : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-600'}
                       transition-all duration-300 relative overflow-hidden
                     `}>
-                      <div className="mt-2 w-full flex justify-center">
-                         {round.winner ? (
-                             <Trophy size={14} className={round.winner === PlayerId.P1 ? 'text-blue-500 dark:text-blue-400' : 'text-red-500 dark:text-red-400'} />
-                         ) : (
-                             <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-bold">ACTIVE</div>
-                         )}
-                      </div>
-                      <div className="flex flex-col-reverse gap-1 my-2 w-full px-2 items-center flex-1 justify-center">
+                      {/* Points Area (Top) */}
+                      <div className="flex flex-wrap justify-center content-start gap-1 w-full p-1.5 flex-1 overflow-hidden">
                          {round.points.map((pt) => (
-                             <div key={pt.id} className="relative w-full flex justify-center">
+                             <div key={pt.id} className="relative">
                                  <div 
                                     className={`w-2 h-2 rounded-full ${pt.winnerId === PlayerId.P1 
-                                      ? 'bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.6)]' 
-                                      : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.6)]'}`}
+                                      ? `${p1C.dot}` 
+                                      : `${p2C.dot}`}
+                                      ${pt.sideSwitchAfter ? 'ring-2 ring-yellow-400 ring-offset-1 dark:ring-offset-slate-800' : ''}
+                                      transition-all
+                                    `}
                                  />
-                                 {pt.sideSwitchAfter && (
-                                     <RefreshCcw size={8} className="absolute -right-1 text-yellow-500 top-0" />
-                                 )}
                              </div>
                          ))}
                       </div>
-                      <div className="mb-1 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-white/60 dark:bg-black/40 px-1.5 py-0.5 rounded">
-                          {round.gameScoreStr}
+                      
+                      {/* Score Area (Bottom) */}
+                      <div className="flex items-center gap-0.5 justify-center w-full py-0.5 bg-white/50 dark:bg-black/20 border-t border-black/5 dark:border-white/5">
+                          <div className="text-[10px] font-mono font-bold text-slate-900 dark:text-white leading-none">
+                              {round.gameScoreStr}
+                          </div>
                       </div>
-                    </div>
-                    <div className="text-center mt-2 h-1 w-full flex justify-center">
-                         {round.winner === PlayerId.P1 && <div className="h-1 w-8 bg-blue-500 rounded-full opacity-50"></div>}
-                         {round.winner === PlayerId.P2 && <div className="h-1 w-8 bg-red-500 rounded-full opacity-50"></div>}
                     </div>
                   </div>
                 </React.Fragment>
                 )
               })}
-              <div className="min-w-[20px]"></div>
+              <div className="min-w-[10px]"></div>
             </div>
           </div>
         );
@@ -429,6 +529,9 @@
         const p1Point = state.points[PlayerId.P1];
         const p2Point = state.points[PlayerId.P2];
         const showSwitch = state.shouldSwitchSides;
+        
+        const p1C = COLORS[state.config.p1Color] || COLORS.blue;
+        const p2C = COLORS[state.config.p2Color] || COLORS.red;
 
         const getServeSide = () => {
           if (state.isMatchOver) return null;
@@ -450,52 +553,75 @@
         };
 
         const serveSide = getServeSide();
+        
+        const formatTime = (seconds) => {
+          const h = Math.floor(seconds / 3600);
+          const m = Math.floor((seconds % 3600) / 60);
+          const s = seconds % 60;
+          return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
 
         return (
-          <div className="flex-1 flex flex-col relative">
-            <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-               <button onClick={onUndo} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
-                   <Undo2 size={20} />
-               </button>
-               <div className="flex gap-2">
-                  <button onClick={onReset} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
+          <div className="flex-1 flex flex-col relative h-full">
+            {/* Consolidated Header */}
+            <div className="flex justify-between items-center px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm z-20">
+               {/* Left: Timer & Config */}
+               <div className="flex flex-col">
+                  <div className="flex items-center gap-2 text-slate-900 dark:text-white font-mono font-bold text-xl leading-none">
+                      <Clock size={16} className="text-slate-400" />
+                      {formatTime(state.durationSeconds)}
+                  </div>
+                  <div className="flex gap-2 mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      <span>{state.config.setsToWin === 1 ? '1 Set' : state.config.setsToWin === 2 ? 'Best of 3' : 'Best of 5'}</span>
+                      <span className="text-slate-300">•</span>
+                      <span>{state.config.useAdvantage ? 'Advantage' : 'No-Ad'}</span>
+                  </div>
+               </div>
+
+               {/* Right: Actions */}
+               <div className="flex items-center gap-1">
+                  <button onClick={onUndo} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 active:scale-90 transition-transform">
+                      <Undo2 size={20} />
+                  </button>
+                  <button onClick={onReset} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 active:scale-90 transition-transform">
                       <RotateCcw size={20} />
                   </button>
-                  <button onClick={onSettings} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
+                  <button onClick={onSettings} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 active:scale-90 transition-transform">
                       <Settings size={20} />
                   </button>
                </div>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-950 py-3 border-b border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
+            {/* Scoreboard Strip */}
+            <div className="bg-slate-50 dark:bg-slate-950 py-2 border-b border-slate-200 dark:border-slate-800 relative">
                 <div className="flex justify-center items-center gap-6 relative z-10">
                     {state.currentSetIndex > 0 && (
-                        <div className="flex gap-4 text-slate-400 dark:text-slate-500 text-sm font-mono font-bold">
+                        <div className="flex gap-4 text-slate-400 dark:text-slate-500 text-xs font-mono font-bold opacity-70">
                            {state.sets.slice(0, state.currentSetIndex).map((s, idx) => (
                                <div key={idx} className="flex flex-col items-center">
-                                   <span className="text-[10px] uppercase tracking-wider mb-0.5">Set {idx+1}</span>
-                                   <span className={s[PlayerId.P1] > s[PlayerId.P2] ? 'text-blue-500' : 'text-red-500'}>
+                                   <span className="text-[9px] uppercase tracking-wider mb-0.5">Set {idx+1}</span>
+                                   <span className={s[PlayerId.P1] > s[PlayerId.P2] ? p1C.text : p2C.text}>
                                        {s[PlayerId.P1]}-{s[PlayerId.P2]}
                                    </span>
                                </div>
                            ))}
                         </div>
                     )}
-                    <div className="flex flex-col items-center px-4 py-1 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+                    <div className="flex flex-col items-center px-5 py-1 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">
                             Set {state.currentSetIndex + 1}
                         </span>
                         <div className="text-3xl font-mono font-black tracking-widest leading-none flex gap-3 text-slate-900 dark:text-white">
-                            <span className="text-blue-600 dark:text-blue-400">{state.games[PlayerId.P1]}</span>
+                            <span className={p1C.text}>{state.games[PlayerId.P1]}</span>
                             <span className="text-slate-300 dark:text-slate-600">-</span>
-                            <span className="text-red-600 dark:text-red-400">{state.games[PlayerId.P2]}</span>
+                            <span className={p2C.text}>{state.games[PlayerId.P2]}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {showSwitch && !state.isMatchOver && (
-                <div className="absolute top-[80px] left-0 right-0 z-30 flex justify-center pointer-events-none">
+                <div className="absolute top-[140px] left-0 right-0 z-30 flex justify-center pointer-events-none">
                     <div className="bg-yellow-400 dark:bg-yellow-500 text-black px-6 py-2 rounded-full font-black text-sm uppercase tracking-widest shadow-xl flex items-center gap-3 animate-bounce">
                         <RefreshCcw size={18} className="animate-spin-slow" />
                         <span>Switch Ends</span>
@@ -504,10 +630,11 @@
                 </div>
             )}
 
+            {/* Serve Indicator */}
             {!state.isMatchOver && (
-              <div className="flex justify-center mt-4">
+              <div className="flex justify-center mt-2">
                  <div className={`
-                   backdrop-blur text-slate-600 dark:text-slate-300 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 border transition-all duration-300
+                   backdrop-blur text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 border transition-all duration-300
                    ${showSwitch 
                       ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700/50 opacity-50 scale-90' 
                       : 'bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'}
@@ -523,33 +650,42 @@
               </div>
             )}
 
-            <div className="flex-1 flex flex-col justify-center gap-2 p-2 relative">
+            {/* Main Buttons */}
+            <div className="flex-1 flex flex-col justify-center gap-2 p-2 relative min-h-0">
+                {/* Player 1 Button */}
                 <button 
                    onClick={() => onPoint(PlayerId.P1)}
                    disabled={state.isMatchOver}
-                   className="group flex-1 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/40 dark:to-slate-900 border-l-4 border-blue-500 relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-sm dark:shadow-none"
+                   className={`
+                     group flex-1 bg-gradient-to-br ${p1C.cardGradient} 
+                     relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-md border-l-4 ${p1C.border} flex flex-col justify-center
+                   `}
                 >
-                   <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-opacity">
-                       <div className="text-9xl font-black text-blue-500">P1</div>
-                   </div>
-                   <div className="flex items-center justify-between h-full px-6">
+                   <div className="flex items-center justify-between w-full px-6">
                        <div className="text-left z-10 flex flex-col items-start">
-                           <div className="text-2xl font-bold text-slate-800 dark:text-blue-100 truncate max-w-[150px]">{p1Name}</div>
+                           <div className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white tracking-tight drop-shadow-sm truncate max-w-[200px]">{p1Name}</div>
                            {state.server === PlayerId.P1 && !state.isMatchOver && (
-                               <div className="mt-2 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] px-2 py-1 rounded-full inline-flex items-center gap-1 font-semibold">
-                                  <span>SERVING</span>
+                               <div className="mt-2 flex items-center gap-2 animate-in fade-in duration-300">
+                                  <div className={`bg-${p1C.name.toLowerCase()}-100 dark:bg-${p1C.name.toLowerCase()}-900/50 text-${p1C.name.toLowerCase()}-700 dark:text-${p1C.name.toLowerCase()}-300 text-[10px] px-2 py-1 rounded-full font-black tracking-widest flex items-center gap-1`}>
+                                     SERVING
+                                  </div>
+                                  <div className="relative">
+                                     <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full animate-bounce" />
+                                     <div className="absolute inset-0 bg-yellow-400 rounded-full animate-ping opacity-50" />
+                                  </div>
                                </div>
                            )}
                        </div>
                        <div className="z-10 text-right">
-                           <div className="text-7xl font-mono font-black text-slate-900 dark:text-white tracking-tighter shadow-blue-500 drop-shadow-lg">
+                           <div className={`text-7xl sm:text-8xl font-mono font-black ${p1C.text} tracking-tighter drop-shadow-sm`}>
                               {p1Point}
                            </div>
                        </div>
                    </div>
                 </button>
 
-                <div className="h-4 flex items-center justify-center">
+                {/* VS Divider */}
+                <div className="h-4 flex items-center justify-center shrink-0">
                     {state.isTieBreak ? (
                         <span className="text-[10px] bg-purple-600 text-white px-3 py-0.5 rounded-full font-bold tracking-wider animate-pulse shadow-lg">TIE BREAK</span>
                     ) : (
@@ -560,25 +696,32 @@
                     )}
                 </div>
 
+                {/* Player 2 Button */}
                 <button 
                    onClick={() => onPoint(PlayerId.P2)}
                    disabled={state.isMatchOver}
-                   className="group flex-1 bg-gradient-to-br from-red-50 to-white dark:from-red-900/40 dark:to-slate-900 border-l-4 border-red-500 relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-sm dark:shadow-none"
+                   className={`
+                     group flex-1 bg-gradient-to-br ${p2C.cardGradient} 
+                     relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-md border-l-4 ${p2C.border} flex flex-col justify-center
+                   `}
                 >
-                   <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-opacity">
-                       <div className="text-9xl font-black text-red-500">P2</div>
-                   </div>
-                   <div className="flex items-center justify-between h-full px-6">
+                   <div className="flex items-center justify-between w-full px-6">
                        <div className="text-left z-10 flex flex-col items-start">
-                           <div className="text-2xl font-bold text-slate-800 dark:text-red-100 truncate max-w-[150px]">{p2Name}</div>
+                           <div className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white tracking-tight drop-shadow-sm truncate max-w-[200px]">{p2Name}</div>
                            {state.server === PlayerId.P2 && !state.isMatchOver && (
-                               <div className="mt-2 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 text-[10px] px-2 py-1 rounded-full inline-flex items-center gap-1 font-semibold">
-                                  <span>SERVING</span>
+                               <div className="mt-2 flex items-center gap-2 animate-in fade-in duration-300">
+                                  <div className={`bg-${p2C.name.toLowerCase()}-100 dark:bg-${p2C.name.toLowerCase()}-900/50 text-${p2C.name.toLowerCase()}-700 dark:text-${p2C.name.toLowerCase()}-300 text-[10px] px-2 py-1 rounded-full font-black tracking-widest flex items-center gap-1`}>
+                                     SERVING
+                                  </div>
+                                  <div className="relative">
+                                     <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full animate-bounce" />
+                                     <div className="absolute inset-0 bg-yellow-400 rounded-full animate-ping opacity-50" />
+                                  </div>
                                </div>
                            )}
                        </div>
                        <div className="z-10 text-right">
-                           <div className="text-7xl font-mono font-black text-slate-900 dark:text-white tracking-tighter drop-shadow-lg">
+                           <div className={`text-7xl sm:text-8xl font-mono font-black ${p2C.text} tracking-tighter drop-shadow-sm`}>
                               {p2Point}
                            </div>
                        </div>
@@ -591,7 +734,7 @@
                     <Trophy size={64} className="text-yellow-500 mb-4 animate-bounce" />
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">MATCH OVER</h2>
                     <p className="text-xl text-slate-600 dark:text-slate-300 mb-8">
-                        Winner: <span className={state.winner === PlayerId.P1 ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-red-600 dark:text-red-400 font-bold'}>
+                        Winner: <span className={state.winner === PlayerId.P1 ? `${p1C.text} font-bold` : `${p2C.text} font-bold`}>
                             {state.winner === PlayerId.P1 ? p1Name : p2Name}
                         </span>
                     </p>
@@ -609,7 +752,6 @@
       const SettingsModal = ({ isOpen, onClose, config, onSave, onReset }) => {
         const [formData, setFormData] = useState(config);
         
-        // Update local state when config prop changes
         useEffect(() => {
             setFormData(config);
         }, [config]);
@@ -624,10 +766,26 @@
           onSave(formData);
           onClose();
         };
+        
+        const ColorPicker = ({ label, value, onChange }) => (
+            <div className="mb-2">
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">{label}</label>
+                <div className="flex gap-2 flex-wrap">
+                    {Object.entries(COLORS).map(([key, color]) => (
+                        <button
+                           key={key}
+                           onClick={() => onChange(key)}
+                           className={`w-8 h-8 rounded-full ${color.primary} transition-transform hover:scale-110 ${value === key ? 'ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-800 scale-110' : 'opacity-70 hover:opacity-100'}`}
+                           aria-label={color.name}
+                        />
+                    ))}
+                </div>
+            </div>
+        );
 
         return (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300">
+            <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300 scale-100 animate-in zoom-in-95 duration-200">
               <div className="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Match Settings</h3>
                 <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">
@@ -636,19 +794,28 @@
               </div>
 
               <div className="overflow-y-auto p-4 space-y-6">
+                
+                {/* Names */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 uppercase">Player 1 Name</label>
+                    <label className={`block text-xs font-bold ${COLORS[formData.p1Color]?.text || 'text-blue-500'} mb-1 uppercase`}>Player 1 Name</label>
                     <input type="text" value={formData.p1Name} onChange={(e) => handleChange('p1Name', e.target.value)}
                       className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-blue-500 outline-none" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-red-600 dark:text-red-400 mb-1 uppercase">Player 2 Name</label>
+                    <label className={`block text-xs font-bold ${COLORS[formData.p2Color]?.text || 'text-red-500'} mb-1 uppercase`}>Player 2 Name</label>
                     <input type="text" value={formData.p2Name} onChange={(e) => handleChange('p2Name', e.target.value)}
                       className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-red-500 outline-none" />
                   </div>
                 </div>
+                
+                {/* Colors */}
+                <div className="grid grid-cols-2 gap-4">
+                    <ColorPicker label="P1 Color" value={formData.p1Color} onChange={(c) => handleChange('p1Color', c)} />
+                    <ColorPicker label="P2 Color" value={formData.p2Color} onChange={(c) => handleChange('p2Color', c)} />
+                </div>
 
+                {/* Rules */}
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold text-slate-500 uppercase border-b border-slate-200 dark:border-slate-700 pb-1">Rules</h4>
                   <div className="flex items-center justify-between">
@@ -733,23 +900,9 @@
           setShowResetConfirm(false);
         };
 
-        const formatTime = (seconds) => {
-          const h = Math.floor(seconds / 3600);
-          const m = Math.floor((seconds % 3600) / 60);
-          const s = seconds % 60;
-          return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        };
-
         return (
           <div className="h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex flex-col overflow-hidden transition-colors duration-300 relative">
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 text-center flex justify-center items-center gap-4 text-xs font-mono text-slate-500 dark:text-slate-400">
-               <span>TIME: {formatTime(matchState.durationSeconds)}</span>
-               <span className="w-1 h-1 bg-slate-400 dark:bg-slate-600 rounded-full"></span>
-               <span>{matchState.config.useAdvantage ? 'ADVANTAGE' : 'NO-AD'}</span>
-               <span className="w-1 h-1 bg-slate-400 dark:bg-slate-600 rounded-full"></span>
-               <span>BEST OF {matchState.config.setsToWin === 1 ? '1' : matchState.config.setsToWin === 2 ? '3' : '5'}</span>
-            </div>
-
+            
             <ScoreControls 
               state={matchState} 
               onPoint={handlePoint} 
@@ -762,8 +915,8 @@
                <MatchHistory 
                   history={matchState.history} 
                   config={matchState.config}
-                  p1Color="blue"
-                  p2Color="red"
+                  p1Color={matchState.config.p1Color}
+                  p2Color={matchState.config.p2Color}
                />
             </div>
 
@@ -772,7 +925,7 @@
               onClose={() => setIsSettingsOpen(false)}
               config={matchState.config}
               onSave={handleUpdateSettings}
-              onReset={() => setShowResetConfirm(true)} // Trigger modal directly from settings
+              onReset={() => setShowResetConfirm(true)}
             />
 
             {showResetConfirm && (
@@ -804,7 +957,6 @@
         );
       };
 
-      // --- MOUNT ---
       const root = createRoot(document.getElementById('root'));
       root.render(<App />);
     </script>
