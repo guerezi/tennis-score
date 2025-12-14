@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { PlayerId, MatchState } from '../types';
 import { Undo2, Settings, Trophy, RefreshCcw, RotateCcw } from 'lucide-react';
@@ -8,6 +9,8 @@ interface Props {
   onUndo: () => void;
   onSettings: () => void;
   onReset: () => void;
+  onToggleServer?: (teamId: PlayerId) => void;
+  authUserId?: string | null;
 }
 
 const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, onReset }) => {

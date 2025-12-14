@@ -1,3 +1,4 @@
+
 export enum PlayerId {
   P1 = 'P1',
   P2 = 'P2',
@@ -11,6 +12,13 @@ export interface MatchConfig {
   finalSetType: 'standard' | 'superTieBreak'; // Standard (to 6) or Super Tie Break (to 10)
   tieBreakAt: number; // Usually 6 games
   tieBreakPoints: number; // Usually 7
+  
+  // Doubles & Styling
+  mode?: 'singles' | 'doubles';
+  p1PartnerName?: string;
+  p2PartnerName?: string;
+  p1Color?: string;
+  p2Color?: string;
 }
 
 export interface PointScore {
@@ -46,11 +54,18 @@ export interface MatchState {
   // Logic flags
   isTieBreak: boolean;
   server: PlayerId;
+  // Track which player in a doubles pair is serving (0 or 1)
+  p1ServerIdx?: number;
+  p2ServerIdx?: number;
+  
   isSecondServe: boolean; // Not strictly tracked for scoring, but good for UI
   shouldSwitchSides: boolean;
 
   // History for Undo/Visualization
   history: HistoryEvent[];
+  
+  // Sync
+  matchId?: string; // Firestore ID
 }
 
 export type HistoryEvent = {
@@ -66,3 +81,35 @@ export type HistoryEvent = {
   };
   sideSwitchAfter: boolean;
 };
+
+// --- Firestore Data Structures ---
+
+// 1. Summary Document (Lightweight, for Lists)
+// Path: clubs/{topic}/active_matches/{matchId}
+export interface LiveMatchSummary {
+  id: string;
+  p1_name: string;
+  p2_name: string;
+  score_summary: string; // Summary string e.g. "6-4, 2-3"
+  
+  // Low frequency updates
+  current_games: GameScore;
+  current_sets: SetScore[];
+  server: PlayerId; // Only changes per game
+  
+  is_doubles: boolean;
+  creator_uid: string;
+  last_updated: any; // Timestamp
+  status: 'LIVE' | 'FINISHED';
+  
+  // Configuration snapshot for spectators
+  config?: MatchConfig;
+}
+
+// 2. Realtime Document (High frequency, for Spectator View)
+// Path: clubs/{topic}/active_matches/{matchId}/realtime/score
+export interface RealtimeMatchData {
+  current_points: PointScore;
+  is_tie_break: boolean;
+  last_updated: any;
+}

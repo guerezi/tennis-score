@@ -1,3 +1,4 @@
+
 import { MatchState, PlayerId, MatchConfig, HistoryEvent, SetScore, GameScore, PointScore } from '../types';
 import { INITIAL_SETS_STATE, POINT_LABELS } from '../constants';
 
@@ -17,6 +18,8 @@ export const initializeMatch = (config: MatchConfig): MatchState => ({
   points: { [PlayerId.P1]: "0", [PlayerId.P2]: "0" },
   isTieBreak: false,
   server: PlayerId.P1, // Default, can be toggled
+  p1ServerIdx: 0,
+  p2ServerIdx: 0,
   isSecondServe: false,
   shouldSwitchSides: false,
   history: [],

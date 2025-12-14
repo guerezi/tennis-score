@@ -1,3 +1,4 @@
+
 import { MatchConfig, PlayerId } from './types';
 
 export const DEFAULT_CONFIG: MatchConfig = {
@@ -8,6 +9,9 @@ export const DEFAULT_CONFIG: MatchConfig = {
   finalSetType: 'superTieBreak', // Default to Super Tie Break
   tieBreakAt: 6,
   tieBreakPoints: 7,
+  mode: 'singles',
+  p1Color: 'blue',
+  p2Color: 'red',
 };
 
 export const INITIAL_SETS_STATE = [
