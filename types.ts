@@ -1,7 +1,6 @@
-
 export enum PlayerId {
-  P1 = 'P1',
-  P2 = 'P2',
+  P1 = "P1",
+  P2 = "P2",
 }
 
 export interface MatchConfig {
@@ -9,12 +8,12 @@ export interface MatchConfig {
   p2Name: string;
   setsToWin: number; // 1, 2 (Best of 3), or 3 (Best of 5)
   useAdvantage: boolean; // true = Ad, false = Golden Point
-  finalSetType: 'standard' | 'superTieBreak'; // Standard (to 6) or Super Tie Break (to 10)
+  finalSetType: "standard" | "superTieBreak"; // Standard (to 6) or Super Tie Break (to 10)
   tieBreakAt: number; // Usually 6 games
   tieBreakPoints: number; // Usually 7
-  
+
   // Doubles & Styling
-  mode?: 'singles' | 'doubles';
+  mode?: "singles" | "doubles";
   p1PartnerName?: string;
   p2PartnerName?: string;
   p1Color?: string;
@@ -44,27 +43,27 @@ export interface MatchState {
   durationSeconds: number;
   isMatchOver: boolean;
   winner?: PlayerId;
-  
+
   // Current counters
   currentSetIndex: number; // 0-indexed
   sets: SetScore[];
   games: GameScore; // Current set games
   points: PointScore; // Current game points
-  
+
   // Logic flags
   isTieBreak: boolean;
   server: PlayerId;
   // Track which player in a doubles pair is serving (0 or 1)
   p1ServerIdx?: number;
   p2ServerIdx?: number;
-  
+
   isSecondServe: boolean; // Not strictly tracked for scoring, but good for UI
   shouldSwitchSides: boolean;
   isPaused: boolean;
 
   // History for Undo/Visualization
   history: HistoryEvent[];
-  
+
   // Sync
   matchId?: string; // Firestore ID
 }
@@ -72,7 +71,7 @@ export interface MatchState {
 export type HistoryEvent = {
   id: string;
   timestamp: number;
-  type: 'POINT' | 'GAME_WIN' | 'SET_WIN' | 'MATCH_WIN';
+  type: "POINT" | "GAME_WIN" | "SET_WIN" | "MATCH_WIN";
   winnerId: PlayerId;
   scoreSnapshot: {
     sets: SetScore[];
@@ -92,21 +91,21 @@ export interface LiveMatchSummary {
   p1_name: string;
   p2_name: string;
   score_summary: string; // Summary string e.g. "6-4, 2-3"
-  
+
   // Low frequency updates
   current_games: GameScore;
   current_sets: SetScore[];
   server: PlayerId; // Only changes per game
-  
+
   is_doubles: boolean;
   creator_uid: string;
   last_updated: any; // Timestamp
   match_duration?: number; // Duration in seconds, updated on summary sync
   startTime?: number | null; // For live timer calculation
   isPaused?: boolean;
-  status: 'LIVE' | 'FINISHED';
+  status: "LIVE" | "FINISHED";
   expiresAt?: any; // TTL for Firestore
-  
+
   // Configuration snapshot for spectators
   config?: MatchConfig;
 }
