@@ -1,25 +1,26 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  query, 
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  onSnapshot,
+  query,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import { MatchState, PlayerId, LiveMatchSummary, RealtimeMatchData } from '../types';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCPhq3Qk4yrUphZY5R0OQSKZvSpf1SffX0",
-  authDomain: "acetrace-tennis.firebaseapp.com",
-  projectId: "acetrace-tennis",
-  storageBucket: "acetrace-tennis.firebasestorage.app",
-  messagingSenderId: "1026629916774",
-  appId: "1:1026629916774:web:695bc3336b67c5811235a7"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
 };
 
 
@@ -62,6 +63,21 @@ export const subscribeToMatchRealtime = (topicId: string, matchId: string, callb
   return unsubscribe;
 };
 
+// 2.5 Subscribe to Specific Match Summary (Games/Sets)
+export const subscribeToMatchSummary = (topicId: string, matchId: string, callback: (data: LiveMatchSummary) => void) => {
+  if (!topicId || !matchId) return () => {};
+
+  const docRef = doc(db, `clubs/${topicId}/active_matches/${matchId}`);
+  
+  const unsubscribe = onSnapshot(docRef, (doc) => {
+    if (doc.exists()) {
+      callback(doc.data() as LiveMatchSummary);
+    }
+  });
+
+  return unsubscribe;
+};
+
 // 3. Sync Match Data (Split Write)
 export const syncMatchToFirestore = async (topicId: string, matchId: string, state: MatchState, userId: string) => {
   if (!topicId || !matchId || !userId) return;
@@ -83,6 +99,7 @@ export const syncMatchToFirestore = async (topicId: string, matchId: string, sta
   const realtimeData: RealtimeMatchData = {
     current_points: state.points,
     is_tie_break: state.isTieBreak,
+    history: state.history,
     last_updated: timestamp
   };
   // Fire and forget realtime update
@@ -110,10 +127,23 @@ export const syncMatchToFirestore = async (topicId: string, matchId: string, sta
       is_doubles: state.config.mode === 'doubles',
       creator_uid: userId,
       last_updated: timestamp,
+      match_duration: state.durationSeconds,
+      startTime: state.startTime,
+      isPaused: state.isPaused,
       status: state.isMatchOver ? 'FINISHED' : 'LIVE',
+      expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000), // TTL: 24 hours from last update
       config: state.config // Save config so spectators can initialize local state if needed
     };
 
     setDoc(summaryRef, summaryData, { merge: true }).catch(e => console.error("Summary Sync Error", e));
   }
+};
+
+export const endMatchInFirestore = async (topicId: string, matchId: string) => {
+  if (!topicId || !matchId) return;
+  const summaryRef = doc(db, `clubs/${topicId}/active_matches/${matchId}`);
+  await setDoc(summaryRef, { 
+      status: 'FINISHED', 
+      last_updated: serverTimestamp() 
+  }, { merge: true });
 };

@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { HistoryEvent, PlayerId, MatchConfig } from '../types';
-import { Trophy, RefreshCcw } from 'lucide-react';
+import { Trophy, RefreshCcw, ChevronDown, ChevronUp, Maximize2, X } from 'lucide-react';
+import { COLOR_CONFIGS } from '../constants';
 
 interface Props {
   history: HistoryEvent[];
@@ -11,6 +12,11 @@ interface Props {
 
 const MatchHistory: React.FC<Props> = ({ history, config, p1Color, p2Color }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [showFullHistory, setShowFullHistory] = useState(false);
+
+  const p1Styles = COLOR_CONFIGS[p1Color] || COLOR_CONFIGS['blue'];
+  const p2Styles = COLOR_CONFIGS[p2Color] || COLOR_CONFIGS['red'];
 
   // Auto scroll to right/bottom when history updates
   useEffect(() => {
@@ -71,99 +77,159 @@ const MatchHistory: React.FC<Props> = ({ history, config, p1Color, p2Color }) =>
       });
   }
 
+  // Group rounds by set for the full view
+  const sets: typeof rounds[] = [];
+  rounds.forEach(r => {
+      if (!sets[r.setIndex]) sets[r.setIndex] = [];
+      sets[r.setIndex].push(r);
+  });
+
   return (
     <div className="w-full bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 transition-colors duration-300">
-      <div className="px-4 py-2 text-xs font-mono text-slate-500 dark:text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 flex justify-between">
-        <span>Match Timeline</span>
-        <span>{history.length} Events</span>
+      <div className="w-full px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+        <button 
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+        >
+            <RefreshCcw size={12} /> Match Timeline
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </button>
+        
+        <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">{history.length} Points</span>
+            <button 
+                onClick={() => setShowFullHistory(true)}
+                className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-blue-500 transition-colors"
+                title="View Full History"
+            >
+                <Maximize2 size={16} />
+            </button>
+        </div>
       </div>
       
-      <div ref={scrollRef} className="flex overflow-x-auto p-4 items-center space-x-2 no-scrollbar h-48">
+      {isExpanded && (
+      <div ref={scrollRef} className="flex overflow-x-auto p-4 items-start space-x-4 no-scrollbar bg-slate-50/50 dark:bg-slate-900/50">
         {rounds.map((round, idx) => {
-          // Check if we need a set divider BEFORE this round
           const showSetDivider = idx > 0 && rounds[idx - 1].setIndex !== round.setIndex;
-          const previousSetIndex = showSetDivider ? rounds[idx-1].setIndex : 0;
           
           return (
           <React.Fragment key={idx}>
-            
-            {/* Set Divider */}
             {showSetDivider && (
-               <div className="flex flex-col justify-center items-center mx-4 h-32 relative group/divider">
-                   <div className="h-full w-px bg-slate-300 dark:bg-slate-600"></div>
-                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 text-[10px] font-bold py-1 px-3 rounded-full border border-slate-600 dark:border-slate-300 whitespace-nowrap z-10 shadow-md">
-                      SET {previousSetIndex + 1}
-                   </div>
+               <div className="flex flex-col justify-center items-center px-2 opacity-50">
+                   <div className="h-8 w-px bg-slate-300 dark:bg-slate-600"></div>
+                   <span className="text-[10px] font-bold my-1 text-slate-400">SET {round.setIndex + 1}</span>
+                   <div className="h-8 w-px bg-slate-300 dark:bg-slate-600"></div>
                </div>
             )}
 
-            <div className="flex flex-col min-w-[60px] relative group h-full justify-end pb-2">
-              
-              {/* Set Label for first item or if no divider used (start of match) */}
-              {idx === 0 && (
-                 <div className="absolute -top-6 left-0 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider w-full text-center">
-                    Set {round.setIndex + 1}
-                 </div>
-              )}
-
-              {/* Game Result Card */}
-              <div className={`
-                flex flex-col items-center justify-between h-32 w-16 rounded-md border shadow-sm
+            <div className={`
+                flex flex-col gap-2 p-3 rounded-xl border shadow-sm min-w-max transition-all
                 ${round.winner === PlayerId.P1 
-                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-500/30' 
+                    ? `${p1Styles.bg} ${p1Styles.border} dark:bg-opacity-10 dark:border-opacity-20` 
                     : round.winner === PlayerId.P2 
-                      ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-500/30' 
-                      : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-600'}
-                transition-all duration-300 relative overflow-hidden
-              `}>
-                
-                {/* Game Winner Indicator */}
-                <div className="mt-2 w-full flex justify-center">
-                   {round.winner ? (
-                       <Trophy size={14} className={round.winner === PlayerId.P1 ? 'text-blue-500 dark:text-blue-400' : 'text-red-500 dark:text-red-400'} />
-                   ) : (
-                       <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-bold">ACTIVE</div>
+                      ? `${p2Styles.bg} ${p2Styles.border} dark:bg-opacity-10 dark:border-opacity-20` 
+                      : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'}
+            `}>
+                <div className="flex items-center justify-between gap-4 mb-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Game {round.gameIndex + 1}</span>
+                    <span className="font-mono font-bold text-xs text-slate-700 dark:text-slate-300 bg-white/50 dark:bg-black/20 px-1.5 rounded">
+                        {round.gameScoreStr}
+                    </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                   {round.points.map((pt) => (
+                       <div key={pt.id} className="relative group/pt">
+                           <div 
+                              className={`w-3 h-3 rounded-full transition-transform hover:scale-125 ${pt.winnerId === PlayerId.P1 
+                                ? `${p1Styles.dot} shadow-sm` 
+                                : `${p2Styles.dot} shadow-sm`}`}
+                           />
+                           {pt.sideSwitchAfter && (
+                               <div className="absolute -top-2 -right-1">
+                                   <RefreshCcw size={8} className="text-slate-500" />
+                               </div>
+                           )}
+                       </div>
+                   ))}
+                   {round.winner && (
+                       <div className="ml-1 pl-2 border-l border-slate-200 dark:border-slate-700/50">
+                           <Trophy size={14} className={round.winner === PlayerId.P1 ? p1Styles.primary : p2Styles.primary} />
+                       </div>
                    )}
                 </div>
-
-                {/* Point Pills (Vertical Stack) */}
-                <div className="flex flex-col-reverse gap-1 my-2 w-full px-2 items-center flex-1 justify-center">
-                   {round.points.map((pt) => {
-                       // Check for side switch
-                       return (
-                           <div key={pt.id} className="relative w-full flex justify-center">
-                               <div 
-                                  className={`w-2 h-2 rounded-full ${pt.winnerId === PlayerId.P1 
-                                    ? 'bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.6)]' 
-                                    : 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.6)]'}`}
-                               />
-                               {pt.sideSwitchAfter && (
-                                   <RefreshCcw size={8} className="absolute -right-1 text-yellow-500 top-0" />
-                               )}
-                           </div>
-                       )
-                   })}
-                </div>
-
-                {/* Game Score at end of round */}
-                <div className="mb-1 text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-white/60 dark:bg-black/40 px-1.5 py-0.5 rounded">
-                    {round.gameScoreStr}
-                </div>
-              </div>
-              
-              {/* Winner Bar below card */}
-              <div className="text-center mt-2 h-1 w-full flex justify-center">
-                   {round.winner === PlayerId.P1 && <div className="h-1 w-8 bg-blue-500 rounded-full opacity-50"></div>}
-                   {round.winner === PlayerId.P2 && <div className="h-1 w-8 bg-red-500 rounded-full opacity-50"></div>}
-              </div>
             </div>
           </React.Fragment>
           )
         })}
-        
-        {/* End padding */}
         <div className="min-w-[20px]"></div>
       </div>
+      )}
+
+      {/* Full History Modal */}
+      {showFullHistory && (
+        <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                <div>
+                    <h2 className="text-lg font-black text-slate-900 dark:text-white">Match Summary</h2>
+                    <p className="text-xs text-slate-500 font-bold uppercase">{config.p1Name} vs {config.p2Name}</p>
+                </div>
+                <button 
+                    onClick={() => setShowFullHistory(false)}
+                    className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                >
+                    <X size={20} />
+                </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                {sets.map((setRounds, setIdx) => (
+                    <div key={setIdx} className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+                            <span className="text-sm font-black text-slate-400 uppercase tracking-widest">Set {setIdx + 1}</span>
+                            <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            {setRounds.map((round, rIdx) => (
+                                <div key={rIdx} className={`
+                                    flex flex-col gap-3 p-4 rounded-xl border shadow-sm
+                                    ${round.winner === PlayerId.P1 
+                                        ? `${p1Styles.bg} ${p1Styles.border} dark:bg-opacity-10 dark:border-opacity-20` 
+                                        : round.winner === PlayerId.P2 
+                                        ? `${p2Styles.bg} ${p2Styles.border} dark:bg-opacity-10 dark:border-opacity-20` 
+                                        : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700'}
+                                `}>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Game {round.gameIndex + 1}</span>
+                                        <span className="font-mono font-bold text-sm text-slate-700 dark:text-slate-300">
+                                            {round.gameScoreStr}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-1.5">
+                                    {round.points.map((pt) => (
+                                        <div key={pt.id} className={`w-2.5 h-2.5 rounded-full ${pt.winnerId === PlayerId.P1 
+                                                ? p1Styles.dot 
+                                                : p2Styles.dot}`} 
+                                        />
+                                    ))}
+                                    </div>
+                                    
+                                    {round.winner && (
+                                        <div className="flex justify-end mt-auto pt-2">
+                                            <Trophy size={14} className={round.winner === PlayerId.P1 ? p1Styles.primary : p2Styles.primary} />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+      )}
     </div>
   );
 };

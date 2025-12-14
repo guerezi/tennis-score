@@ -1,13 +1,13 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DEFAULT_CONFIG } from './constants';
 import { MatchState, PlayerId, MatchConfig, LiveMatchSummary, RealtimeMatchData } from './types';
 import { initializeMatch, addPoint, undoPoint } from './services/tennisLogic';
 import ScoreControls from './components/ScoreControls';
 import MatchHistory from './components/MatchHistory';
 import SettingsModal from './components/SettingsModal';
-import { AlertTriangle, Trophy, Wifi, Search, ArrowRight, Activity, Plus, User, Users, History, Share2, Check, Eye } from 'lucide-react';
-import { auth, subscribeToClubMatches, syncMatchToFirestore, subscribeToMatchRealtime } from './services/firebase';
+import { AlertTriangle, Trophy, Wifi, Search, ArrowRight, Activity, Plus, User, Users, History, Share2, Check, Eye, WifiOff } from 'lucide-react';
+import { auth, subscribeToClubMatches, syncMatchToFirestore, subscribeToMatchRealtime, subscribeToMatchSummary, endMatchInFirestore } from './services/firebase';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 
 const App: React.FC = () => {
@@ -53,7 +53,7 @@ const App: React.FC = () => {
 
   // --- SYNC EFFECT (SCORER) ---
   useEffect(() => {
-    if (!authUserId || !topic || view !== 'match') return;
+    if (!authUserId || !topic || view !== 'match' || topic === 'offline') return;
     
     let currentMatchId = matchState.matchId;
     if (!currentMatchId) return; 
@@ -64,18 +64,43 @@ const App: React.FC = () => {
 
   // Timer Effect
   useEffect(() => {
-    if (matchState.isMatchOver || view !== 'match') return;
+    if (matchState.isMatchOver || view !== 'match' || matchState.isPaused) return;
     const interval = setInterval(() => {
-      setMatchState(prev => ({
-        ...prev,
-        durationSeconds: Math.floor((Date.now() - (prev.startTime || Date.now())) / 1000)
-      }));
+      setMatchState(prev => {
+          if (prev.isPaused) return prev;
+          return {
+            ...prev,
+            durationSeconds: Math.floor((Date.now() - (prev.startTime || Date.now())) / 1000)
+          };
+      });
     }, 1000);
     return () => clearInterval(interval);
-  }, [matchState.isMatchOver, matchState.startTime, view]);
+  }, [matchState.isMatchOver, matchState.startTime, view, matchState.isPaused]);
 
 
   // --- HANDLERS ---
+
+  const handleTogglePause = () => {
+      setMatchState(prev => {
+          const now = Date.now();
+          if (prev.isPaused) {
+              // Resuming: Adjust startTime so that (now - startTime) equals the duration we had when we paused.
+              // duration = now - startTime  =>  startTime = now - duration
+              // We use prev.durationSeconds as the accumulated duration.
+              return {
+                  ...prev,
+                  isPaused: false,
+                  startTime: now - (prev.durationSeconds * 1000)
+              };
+          } else {
+              // Pausing
+              return {
+                  ...prev,
+                  isPaused: true
+              };
+          }
+      });
+  };
 
   const handleConnect = (inputTopic: string) => {
       if (!inputTopic.trim()) return;
@@ -94,6 +119,11 @@ const App: React.FC = () => {
       setView('dashboard');
   };
 
+  const handleOffline = () => {
+      setTopic("offline");
+      setView('dashboard');
+  };
+
   const handleStartSetup = () => {
      setView('setup');
   };
@@ -106,7 +136,7 @@ const App: React.FC = () => {
     setMatchState(newState);
     setView('match');
     
-    if (authUserId && topic) {
+    if (authUserId && topic && topic !== 'offline') {
         syncMatchToFirestore(topic, newMatchId, newState, authUserId);
     }
   };
@@ -128,7 +158,10 @@ const App: React.FC = () => {
     setMatchState(prev => ({ ...prev, config: newConfig }));
   };
   
-  const handleReset = () => {
+  const handleReset = async () => {
+    if (matchState.matchId && topic && topic !== 'offline') {
+        await endMatchInFirestore(topic, matchState.matchId);
+    }
     setMatchState(initializeMatch(matchState.config));
     setShowResetConfirm(false);
     setView('dashboard'); 
@@ -137,7 +170,7 @@ const App: React.FC = () => {
   // --- RENDER ---
 
   if (view === 'landing') {
-      return <LandingScreen onConnect={handleConnect} />;
+      return <LandingScreen onConnect={handleConnect} onOffline={handleOffline} />;
   }
 
   if (view === 'dashboard') {
@@ -181,6 +214,8 @@ const App: React.FC = () => {
                     return newState;
                 });
             }}
+            onBack={() => setView('dashboard')}
+            onTogglePause={handleTogglePause}
             authUserId={authUserId}
             topic={topic}
         />
@@ -229,7 +264,7 @@ const App: React.FC = () => {
 
 // --- VIEW COMPONENTS ---
 
-const LandingScreen = ({ onConnect }: { onConnect: (t: string) => void }) => {
+const LandingScreen = ({ onConnect, onOffline }: { onConnect: (t: string) => void, onOffline: () => void }) => {
     const [val, setVal] = useState('');
     const [recents, setRecents] = useState<string[]>([]);
 
@@ -272,6 +307,19 @@ const LandingScreen = ({ onConnect }: { onConnect: (t: string) => void }) => {
                     >
                         Go to Club <ArrowRight size={20} />
                     </button>
+
+                    <div className="relative flex py-3 items-center">
+                        <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                        <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-bold uppercase">Or</span>
+                        <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                    </div>
+
+                    <button 
+                        onClick={onOffline}
+                        className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                    >
+                        <WifiOff size={20} /> Play Offline
+                    </button>
                 </div>
 
                 {recents.length > 0 && (
@@ -304,13 +352,19 @@ const ClubDashboard = ({ topic, onStartMatch, onWatchMatch, authUserId }: { topi
     const [loading, setLoading] = useState(true);
     const [copied, setCopied] = useState(false);
 
+    const isOffline = topic === 'offline';
+
     useEffect(() => {
+        if (isOffline) {
+            setLoading(false);
+            return;
+        }
         const unsub = subscribeToClubMatches(topic, (data) => {
             setMatches(data);
             setLoading(false);
         });
         return () => unsub();
-    }, [topic]);
+    }, [topic, isOffline]);
 
     const handleShare = () => {
         const url = window.location.href;
@@ -320,6 +374,15 @@ const ClubDashboard = ({ topic, onStartMatch, onWatchMatch, authUserId }: { topi
         });
     };
 
+    const formatTime = (seconds: number) => {
+        if (!seconds) return "0:00";
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
     return (
         <div className="h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col pb-safe">
             {/* Header */}
@@ -327,14 +390,22 @@ const ClubDashboard = ({ topic, onStartMatch, onWatchMatch, authUserId }: { topi
                 <div className="px-4 py-4 flex items-center justify-between">
                     <div>
                         <div className="flex items-center gap-2">
-                            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">{topic}</h1>
-                            <button onClick={handleShare} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors relative">
-                                {copied ? <Check size={16} className="text-green-500" /> : <Share2 size={16} />}
-                            </button>
+                            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase">{isOffline ? "Offline Mode" : topic}</h1>
+                            {!isOffline && (
+                                <button onClick={handleShare} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors relative">
+                                    {copied ? <Check size={16} className="text-green-500" /> : <Share2 size={16} />}
+                                </button>
+                            )}
                         </div>
-                        <p className="text-xs font-bold text-slate-500 flex items-center gap-1 mt-1">
-                            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> LIVE FEED
-                        </p>
+                        {!isOffline ? (
+                            <p className="text-xs font-bold text-slate-500 flex items-center gap-1 mt-1">
+                                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> LIVE FEED
+                            </p>
+                        ) : (
+                             <p className="text-xs font-bold text-slate-500 flex items-center gap-1 mt-1">
+                                <WifiOff size={12} /> No internet connection required
+                            </p>
+                        )}
                     </div>
                     <button 
                         onClick={onStartMatch}
@@ -346,7 +417,7 @@ const ClubDashboard = ({ topic, onStartMatch, onWatchMatch, authUserId }: { topi
             </div>
 
             {/* Match List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4">
                 {loading ? (
                     <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-400"></div></div>
                 ) : matches.length === 0 ? (
@@ -355,60 +426,68 @@ const ClubDashboard = ({ topic, onStartMatch, onWatchMatch, authUserId }: { topi
                             <Trophy size={32} className="text-slate-400" />
                         </div>
                         <div className="text-center">
-                            <p className="text-slate-900 dark:text-white font-bold text-lg">No active matches</p>
-                            <p className="text-sm text-slate-500">Matches played at <span className="uppercase font-bold">{topic}</span> will appear here.</p>
+                            <p className="text-slate-900 dark:text-white font-bold text-lg">{isOffline ? "Ready to Play" : "No active matches"}</p>
+                            <p className="text-sm text-slate-500">{isOffline ? "Start a match to keep score locally." : <span>Matches played at <span className="uppercase font-bold">{topic}</span> will appear here.</span>}</p>
                         </div>
-                        <button onClick={onStartMatch} className="text-blue-500 font-bold text-sm hover:underline">Start the first match</button>
+                        <button onClick={onStartMatch} className="text-blue-500 font-bold text-sm hover:underline">{isOffline ? "Start Match" : "Start the first match"}</button>
                     </div>
                 ) : (
-                    matches.map(m => (
-                        <div 
-                            key={m.id} 
-                            onClick={() => onWatchMatch(m)}
-                            className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer"
-                        >
-                            {m.status === 'LIVE' && (
-                                <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
-                                    <Eye size={8} /> LIVE
-                                </div>
-                            )}
-                            <div className="flex justify-between items-center mb-3">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{m.is_doubles ? 'Doubles' : 'Singles'}</div>
-                                {m.creator_uid === authUserId && <div className="text-[10px] text-blue-500 font-bold flex items-center gap-1"><User size={10}/> YOUR MATCH</div>}
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                {/* Players & Server Indicator (from Summary) */}
-                                <div className="flex-1 space-y-2">
-                                    <div className="font-bold text-lg text-slate-800 dark:text-white truncate flex items-center gap-2">
-                                        <span className="w-1 h-4 bg-blue-500 rounded-full"></span>
-                                        {m.p1_name}
-                                        {/* Server dot here comes from Summary, so it updates per Game, not per Point. This is the trade-off. */}
-                                        {m.status === 'LIVE' && m.server === PlayerId.P1 && <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-70"></div>}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {matches.map(m => (
+                            <div 
+                                key={m.id} 
+                                onClick={() => onWatchMatch(m)}
+                                className="bg-white dark:bg-slate-900 rounded-xl p-3 shadow-sm border border-slate-200 dark:border-slate-800 relative overflow-hidden group hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer flex flex-col justify-between min-h-[120px]"
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        {m.status === 'LIVE' && (
+                                            <div className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                <Eye size={8} /> LIVE
+                                            </div>
+                                        )}
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                            {m.is_doubles ? 'Doubles' : 'Singles'}
+                                        </div>
                                     </div>
-                                    <div className="font-bold text-lg text-slate-800 dark:text-white truncate flex items-center gap-2">
-                                        <span className="w-1 h-4 bg-red-500 rounded-full"></span>
-                                        {m.p2_name}
-                                        {m.status === 'LIVE' && m.server === PlayerId.P2 && <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-70"></div>}
+                                    <div className="font-mono font-bold text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                                        {formatTime(m.match_duration || 0)}
                                     </div>
                                 </div>
+                                
+                                <div className="flex items-center justify-between gap-4">
+                                    {/* Players */}
+                                    <div className="flex-1 space-y-1.5">
+                                        <div className="font-bold text-base text-slate-800 dark:text-white truncate flex items-center gap-2">
+                                            <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
+                                            <span className="truncate">{m.p1_name}</span>
+                                            {m.status === 'LIVE' && m.server === PlayerId.P1 && <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-70 flex-shrink-0"></div>}
+                                        </div>
+                                        <div className="font-bold text-base text-slate-800 dark:text-white truncate flex items-center gap-2">
+                                            <span className="w-1 h-3 bg-red-500 rounded-full"></span>
+                                            <span className="truncate">{m.p2_name}</span>
+                                            {m.status === 'LIVE' && m.server === PlayerId.P2 && <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-70 flex-shrink-0"></div>}
+                                        </div>
+                                    </div>
 
-                                {/* Scoreboard: Sets Only (Optimization) */}
-                                <div className="text-right pl-4 flex items-center gap-4">
-                                    <div className="flex flex-col items-end">
-                                        <div className="text-xl font-mono font-bold text-slate-900 dark:text-white tracking-tighter">
+                                    {/* Score */}
+                                    <div className="text-right">
+                                        <div className="text-xl font-mono font-black text-slate-900 dark:text-white tracking-tighter leading-none">
                                             {m.score_summary || "0-0"}
                                         </div>
-                                        <div className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-wide">Sets / Games</div>
                                     </div>
                                 </div>
+                                
+                                {m.creator_uid === authUserId && (
+                                    <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                                        <div className="text-[9px] text-blue-500 font-bold flex items-center gap-1">
+                                            <User size={10}/> YOUR MATCH
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            
-                            <div className="mt-2 text-[10px] text-center text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                Tap to watch live points
-                            </div>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 )}
             </div>
         </div>
@@ -416,33 +495,57 @@ const ClubDashboard = ({ topic, onStartMatch, onWatchMatch, authUserId }: { topi
 };
 
 // SPECTATOR VIEW: Connects to Realtime Channel
-const SpectatorScreen = ({ topic, matchSummary, onBack }: { topic: string, matchSummary: LiveMatchSummary, onBack: () => void }) => {
+const SpectatorScreen = ({ topic, matchSummary: initialSummary, onBack }: { topic: string, matchSummary: LiveMatchSummary, onBack: () => void }) => {
     const [realtimeData, setRealtimeData] = useState<RealtimeMatchData | null>(null);
+    const [liveSummary, setLiveSummary] = useState<LiveMatchSummary>(initialSummary);
+    const [localDuration, setLocalDuration] = useState(initialSummary.match_duration || 0);
 
     useEffect(() => {
-        const unsub = subscribeToMatchRealtime(topic, matchSummary.id, (data) => {
+        const unsubRT = subscribeToMatchRealtime(topic, initialSummary.id, (data) => {
             setRealtimeData(data);
         });
-        return () => unsub();
-    }, [topic, matchSummary.id]);
+        const unsubSum = subscribeToMatchSummary(topic, initialSummary.id, (data) => {
+            setLiveSummary(data);
+        });
+        return () => {
+            unsubRT();
+            unsubSum();
+        };
+    }, [topic, initialSummary.id]);
+
+    // Local Timer Effect for Spectator
+    useEffect(() => {
+        if (liveSummary.status === 'FINISHED' || liveSummary.isPaused) {
+            setLocalDuration(liveSummary.match_duration || 0);
+            return;
+        }
+        
+        const interval = setInterval(() => {
+            if (liveSummary.startTime) {
+                setLocalDuration(Math.floor((Date.now() - liveSummary.startTime) / 1000));
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [liveSummary.status, liveSummary.isPaused, liveSummary.startTime, liveSummary.match_duration]);
 
     // Construct a read-only MatchState for the ScoreControls component
     const spectatorState: MatchState = {
-        config: matchSummary.config || DEFAULT_CONFIG,
-        startTime: null,
-        durationSeconds: 0,
-        isMatchOver: matchSummary.status === 'FINISHED',
+        config: liveSummary.config || DEFAULT_CONFIG,
+        startTime: liveSummary.startTime || null,
+        durationSeconds: localDuration,
+        isMatchOver: liveSummary.status === 'FINISHED',
         winner: undefined,
-        currentSetIndex: matchSummary.current_sets.length,
-        sets: matchSummary.current_sets,
-        games: matchSummary.current_games,
+        currentSetIndex: Math.max(0, liveSummary.current_sets.length - 1),
+        sets: liveSummary.current_sets,
+        games: liveSummary.current_games,
         // Use realtime points if available, else default
         points: realtimeData?.current_points || { [PlayerId.P1]: "0", [PlayerId.P2]: "0" },
         isTieBreak: realtimeData?.is_tie_break || false,
-        server: matchSummary.server,
+        server: liveSummary.server,
         shouldSwitchSides: false, // Calculated locally or could be synced
-        history: [], // Not needed for spectator
-        isSecondServe: false
+        history: realtimeData?.history || [], // Use synced history
+        isSecondServe: false,
+        isPaused: liveSummary.isPaused || false
     };
 
     return (
@@ -451,9 +554,9 @@ const SpectatorScreen = ({ topic, matchSummary, onBack }: { topic: string, match
                &larr; Back to Dashboard
             </button>
             
-            <div className="flex-1 flex flex-col pointer-events-none"> 
+            <div className="flex-1 flex flex-col pointer-events-none overflow-hidden"> 
                 {/* Pointer events none makes it read-only mostly, but buttons might need disabling */}
-                <div className="opacity-100">
+                <div className="opacity-100 flex-1 flex flex-col">
                     <ScoreControls 
                         state={spectatorState} 
                         onPoint={() => {}} 
@@ -462,6 +565,16 @@ const SpectatorScreen = ({ topic, matchSummary, onBack }: { topic: string, match
                         onReset={() => {}} 
                         authUserId={null} // Read only
                     />
+                    
+                    {/* Match History Timeline */}
+                    <div className="flex-shrink-0 pointer-events-auto">
+                        <MatchHistory 
+                            history={spectatorState.history} 
+                            config={spectatorState.config}
+                            p1Color={spectatorState.config.p1Color}
+                            p2Color={spectatorState.config.p2Color}
+                        />
+                    </div>
                 </div>
             </div>
             
@@ -482,13 +595,6 @@ const AppContent = (props: any) => {
 
     return (
         <>
-            {/* Header Info */}
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 text-center flex justify-center items-center gap-4 text-xs font-mono text-slate-500 dark:text-slate-400">
-                <span className="font-bold text-slate-900 dark:text-white uppercase">{topic}</span>
-                <span className="w-1 h-1 bg-slate-400 dark:bg-slate-600 rounded-full"></span>
-                <span>TIME: {Math.floor(matchState.durationSeconds / 60)}:{(matchState.durationSeconds % 60).toString().padStart(2, '0')}</span>
-            </div>
-
             <ScoreControls 
                 state={matchState} 
                 onPoint={props.onPoint} 
@@ -496,6 +602,8 @@ const AppContent = (props: any) => {
                 onSettings={props.onSettings}
                 onReset={props.onReset}
                 onToggleServer={props.onToggleServer}
+                onBack={props.onBack}
+                onTogglePause={props.onTogglePause}
                 authUserId={props.authUserId}
             />
 
@@ -534,7 +642,7 @@ const SetupScreen = ({ config, onStart, authUserId, topic }: any) => {
                         </div>
                      </div>
                      <h1 className="text-3xl font-black text-slate-900 dark:text-white">New Match</h1>
-                     <p className="text-slate-500">Streaming to: <span className="font-bold text-slate-800 dark:text-slate-200 uppercase">{topic}</span></p>
+                     <p className="text-slate-500">{topic === 'offline' ? "Offline Mode (No Streaming)" : <span>Streaming to: <span className="font-bold text-slate-800 dark:text-slate-200 uppercase">{topic}</span></span>}</p>
                 </div>
 
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">

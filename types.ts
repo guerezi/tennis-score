@@ -60,6 +60,7 @@ export interface MatchState {
   
   isSecondServe: boolean; // Not strictly tracked for scoring, but good for UI
   shouldSwitchSides: boolean;
+  isPaused: boolean;
 
   // History for Undo/Visualization
   history: HistoryEvent[];
@@ -100,7 +101,11 @@ export interface LiveMatchSummary {
   is_doubles: boolean;
   creator_uid: string;
   last_updated: any; // Timestamp
+  match_duration?: number; // Duration in seconds, updated on summary sync
+  startTime?: number | null; // For live timer calculation
+  isPaused?: boolean;
   status: 'LIVE' | 'FINISHED';
+  expiresAt?: any; // TTL for Firestore
   
   // Configuration snapshot for spectators
   config?: MatchConfig;
@@ -111,5 +116,6 @@ export interface LiveMatchSummary {
 export interface RealtimeMatchData {
   current_points: PointScore;
   is_tie_break: boolean;
+  history: HistoryEvent[]; // Added for timeline
   last_updated: any;
 }

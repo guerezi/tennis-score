@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { PlayerId, MatchState } from '../types';
-import { Undo2, Settings, Trophy, RefreshCcw, RotateCcw } from 'lucide-react';
+import { Undo2, Settings, Trophy, RefreshCcw, RotateCcw, ArrowLeft, Pause, Play } from 'lucide-react';
+import { COLOR_CONFIGS } from '../constants';
 
 interface Props {
   state: MatchState;
@@ -10,12 +11,17 @@ interface Props {
   onSettings: () => void;
   onReset: () => void;
   onToggleServer?: (teamId: PlayerId) => void;
+  onBack?: () => void;
+  onTogglePause?: () => void;
   authUserId?: string | null;
 }
 
-const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, onReset }) => {
-  const p1Name = state.config.p1Name;
-  const p2Name = state.config.p2Name;
+const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, onReset, onToggleServer, onBack, onTogglePause }) => {
+  const { p1Name, p2Name, mode, p1PartnerName, p2PartnerName, p1Color = 'blue', p2Color = 'red' } = state.config;
+  const isDoubles = mode === 'doubles';
+
+  const p1Styles = COLOR_CONFIGS[p1Color] || COLOR_CONFIGS['blue'];
+  const p2Styles = COLOR_CONFIGS[p2Color] || COLOR_CONFIGS['red'];
 
   // Formatting points for display
   const p1Point = state.points[PlayerId.P1];
@@ -51,16 +57,43 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
 
   const serveSide = getServeSide();
 
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="flex-1 flex flex-col relative">
       
       {/* Top Bar: Controls */}
       <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-         <button onClick={onUndo} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
-             <Undo2 size={20} />
-         </button>
+         {/* Timer Group (Back + Time + Pause) */}
+         <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-1">
+             {onBack && (
+                 <button onClick={onBack} className="p-1.5 rounded-md hover:bg-white dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 shadow-sm transition-all">
+                     <ArrowLeft size={18} />
+                 </button>
+             )}
+             
+             <div className="flex items-center gap-2 px-2">
+                 <span className={`font-mono font-bold text-lg ${state.isPaused ? 'text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                     {formatTime(state.durationSeconds)}
+                 </span>
+                 {onTogglePause && !state.isMatchOver && (
+                     <button onClick={onTogglePause} className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors">
+                         {state.isPaused ? <Play size={14} className="fill-current" /> : <Pause size={14} className="fill-current" />}
+                     </button>
+                 )}
+             </div>
+         </div>
          
          <div className="flex gap-2">
+            <button onClick={onUndo} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
+                <Undo2 size={20} />
+            </button>
             <button onClick={onReset} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400">
                 <RotateCcw size={20} />
             </button>
@@ -79,7 +112,7 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
                      {state.sets.slice(0, state.currentSetIndex).map((s, idx) => (
                          <div key={idx} className="flex flex-col items-center">
                              <span className="text-[10px] uppercase tracking-wider mb-0.5">Set {idx+1}</span>
-                             <span className={s[PlayerId.P1] > s[PlayerId.P2] ? 'text-blue-500' : 'text-red-500'}>
+                             <span className={s[PlayerId.P1] > s[PlayerId.P2] ? p1Styles.primary : p2Styles.primary}>
                                  {s[PlayerId.P1]}-{s[PlayerId.P2]}
                              </span>
                          </div>
@@ -93,9 +126,9 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
                       Set {state.currentSetIndex + 1}
                   </span>
                   <div className="text-3xl font-mono font-black tracking-widest leading-none flex gap-3 text-slate-900 dark:text-white">
-                      <span className="text-blue-600 dark:text-blue-400">{state.games[PlayerId.P1]}</span>
+                      <span className={p1Styles.primary}>{state.games[PlayerId.P1]}</span>
                       <span className="text-slate-300 dark:text-slate-600">-</span>
-                      <span className="text-red-600 dark:text-red-400">{state.games[PlayerId.P2]}</span>
+                      <span className={p2Styles.primary}>{state.games[PlayerId.P2]}</span>
                   </div>
               </div>
           </div>
@@ -103,11 +136,11 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
 
       {/* Switch Side Prominent Indicator */}
       {showSwitch && !state.isMatchOver && (
-          <div className="absolute top-[80px] left-0 right-0 z-30 flex justify-center pointer-events-none">
-              <div className="bg-yellow-400 dark:bg-yellow-500 text-black px-6 py-2 rounded-full font-black text-sm uppercase tracking-widest shadow-xl flex items-center gap-3 animate-bounce">
-                  <RefreshCcw size={18} className="animate-spin-slow" />
+          <div className="absolute top-[120px] left-0 right-0 z-50 flex justify-center pointer-events-none">
+              <div className="bg-yellow-400 dark:bg-yellow-500 text-black px-8 py-3 rounded-full font-black text-base uppercase tracking-widest shadow-2xl flex items-center gap-3 animate-bounce border-4 border-white dark:border-slate-900">
+                  <RefreshCcw size={20} className="animate-spin-slow" />
                   <span>Switch Ends</span>
-                  <RefreshCcw size={18} className="animate-spin-slow" />
+                  <RefreshCcw size={20} className="animate-spin-slow" />
               </div>
           </div>
       )}
@@ -139,24 +172,57 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
           <button 
              onClick={() => onPoint(PlayerId.P1)}
              disabled={state.isMatchOver}
-             className="group flex-1 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/40 dark:to-slate-900 border-l-4 border-blue-500 relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-sm dark:shadow-none"
+             className={`group flex-1 bg-gradient-to-br ${p1Styles.gradientFrom} to-white ${p1Styles.darkGradientFrom} dark:to-slate-900 border-l-4 ${p1Styles.border} relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-sm dark:shadow-none`}
           >
              <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-opacity">
-                 <div className="text-9xl font-black text-blue-500">P1</div>
+                 <div className={`text-9xl font-black ${p1Styles.primary}`}>P1</div>
              </div>
              
              <div className="flex items-center justify-between h-full px-6">
-                 <div className="text-left z-10 flex flex-col items-start">
-                     <div className="text-2xl font-bold text-slate-800 dark:text-blue-100 truncate max-w-[150px]">{p1Name}</div>
+                 <div className="text-left z-10 flex flex-col items-start gap-1">
+                     {/* Player 1 Name */}
+                     <div 
+                        onClick={(e) => {
+                            if (isDoubles && state.server === PlayerId.P1 && onToggleServer) {
+                                e.stopPropagation();
+                                onToggleServer(PlayerId.P1);
+                            }
+                        }}
+                        className={`text-2xl font-bold ${p1Styles.text} ${p1Styles.darkText} truncate max-w-[150px] flex items-center gap-2 ${isDoubles && state.server === PlayerId.P1 ? 'cursor-pointer hover:opacity-80' : ''}`}
+                     >
+                        {p1Name}
+                        {state.server === PlayerId.P1 && (!isDoubles || state.p1ServerIdx === 0) && !state.isMatchOver && (
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                        )}
+                     </div>
+
+                     {/* Player 1 Partner (Doubles) */}
+                     {isDoubles && (
+                         <div 
+                            onClick={(e) => {
+                                if (state.server === PlayerId.P1 && onToggleServer) {
+                                    e.stopPropagation();
+                                    onToggleServer(PlayerId.P1);
+                                }
+                            }}
+                            className={`text-xl font-bold text-slate-600 dark:text-white/60 truncate max-w-[150px] flex items-center gap-2 ${state.server === PlayerId.P1 ? 'cursor-pointer hover:opacity-80' : ''}`}
+                         >
+                            {p1PartnerName || "Partner"}
+                            {state.server === PlayerId.P1 && state.p1ServerIdx === 1 && !state.isMatchOver && (
+                                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                            )}
+                         </div>
+                     )}
+
                      {state.server === PlayerId.P1 && !state.isMatchOver && (
-                         <div className="mt-2 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] px-2 py-1 rounded-full inline-flex items-center gap-1 font-semibold">
+                         <div className={`mt-1 ${p1Styles.badgeBg} ${p1Styles.badgeText} text-xs px-3 py-1 rounded-full inline-flex items-center gap-1 font-bold shadow-sm border border-current/20`}>
                             <span>SERVING</span>
                          </div>
                      )}
                  </div>
                  
                  <div className="z-10 text-right">
-                     <div className="text-7xl font-mono font-black text-slate-900 dark:text-white tracking-tighter shadow-blue-500 drop-shadow-lg">
+                     <div className={`text-7xl font-mono font-black ${p1Styles.scoreColor} ${p1Styles.darkScoreColor} tracking-tighter shadow-blue-500 drop-shadow-lg`}>
                         {p1Point}
                      </div>
                  </div>
@@ -179,24 +245,57 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
           <button 
              onClick={() => onPoint(PlayerId.P2)}
              disabled={state.isMatchOver}
-             className="group flex-1 bg-gradient-to-br from-red-50 to-white dark:from-red-900/40 dark:to-slate-900 border-l-4 border-red-500 relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-sm dark:shadow-none"
+             className={`group flex-1 bg-gradient-to-br ${p2Styles.gradientFrom} to-white ${p2Styles.darkGradientFrom} dark:to-slate-900 border-l-4 ${p2Styles.border} relative overflow-hidden rounded-xl active:scale-[0.98] transition-all touch-manipulation shadow-sm dark:shadow-none`}
           >
              <div className="absolute top-0 right-0 p-4 opacity-5 dark:opacity-10 group-hover:opacity-10 dark:group-hover:opacity-20 transition-opacity">
-                 <div className="text-9xl font-black text-red-500">P2</div>
+                 <div className={`text-9xl font-black ${p2Styles.primary}`}>P2</div>
              </div>
              
              <div className="flex items-center justify-between h-full px-6">
-                 <div className="text-left z-10 flex flex-col items-start">
-                     <div className="text-2xl font-bold text-slate-800 dark:text-red-100 truncate max-w-[150px]">{p2Name}</div>
+                 <div className="text-left z-10 flex flex-col items-start gap-1">
+                     {/* Player 2 Name */}
+                     <div 
+                        onClick={(e) => {
+                            if (isDoubles && state.server === PlayerId.P2 && onToggleServer) {
+                                e.stopPropagation();
+                                onToggleServer(PlayerId.P2);
+                            }
+                        }}
+                        className={`text-2xl font-bold ${p2Styles.text} ${p2Styles.darkText} truncate max-w-[150px] flex items-center gap-2 ${isDoubles && state.server === PlayerId.P2 ? 'cursor-pointer hover:opacity-80' : ''}`}
+                     >
+                        {p2Name}
+                        {state.server === PlayerId.P2 && (!isDoubles || state.p2ServerIdx === 0) && !state.isMatchOver && (
+                            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                        )}
+                     </div>
+
+                     {/* Player 2 Partner (Doubles) */}
+                     {isDoubles && (
+                         <div 
+                            onClick={(e) => {
+                                if (state.server === PlayerId.P2 && onToggleServer) {
+                                    e.stopPropagation();
+                                    onToggleServer(PlayerId.P2);
+                                }
+                            }}
+                            className={`text-xl font-bold text-slate-600 dark:text-white/60 truncate max-w-[150px] flex items-center gap-2 ${state.server === PlayerId.P2 ? 'cursor-pointer hover:opacity-80' : ''}`}
+                         >
+                            {p2PartnerName || "Partner"}
+                            {state.server === PlayerId.P2 && state.p2ServerIdx === 1 && !state.isMatchOver && (
+                                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                            )}
+                         </div>
+                     )}
+
                      {state.server === PlayerId.P2 && !state.isMatchOver && (
-                         <div className="mt-2 bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300 text-[10px] px-2 py-1 rounded-full inline-flex items-center gap-1 font-semibold">
+                         <div className={`mt-1 ${p2Styles.badgeBg} ${p2Styles.badgeText} text-xs px-3 py-1 rounded-full inline-flex items-center gap-1 font-bold shadow-sm border border-current/20`}>
                             <span>SERVING</span>
                          </div>
                      )}
                  </div>
                  
                  <div className="z-10 text-right">
-                     <div className="text-7xl font-mono font-black text-slate-900 dark:text-white tracking-tighter drop-shadow-lg">
+                     <div className={`text-7xl font-mono font-black ${p2Styles.scoreColor} ${p2Styles.darkScoreColor} tracking-tighter drop-shadow-lg`}>
                         {p2Point}
                      </div>
                  </div>
@@ -209,7 +308,7 @@ const ScoreControls: React.FC<Props> = ({ state, onPoint, onUndo, onSettings, on
               <Trophy size={64} className="text-yellow-500 mb-4 animate-bounce" />
               <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">MATCH OVER</h2>
               <p className="text-xl text-slate-600 dark:text-slate-300 mb-8">
-                  Winner: <span className={state.winner === PlayerId.P1 ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-red-600 dark:text-red-400 font-bold'}>
+                  Winner: <span className={state.winner === PlayerId.P1 ? `${p1Styles.primary} font-bold` : `${p2Styles.primary} font-bold`}>
                       {state.winner === PlayerId.P1 ? p1Name : p2Name}
                   </span>
               </p>

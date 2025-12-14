@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MatchConfig } from '../types';
 import { X, Save } from 'lucide-react';
+import { COLOR_CONFIGS } from '../constants';
 
 interface Props {
   isOpen: boolean;
@@ -24,6 +25,8 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave, onRes
     onClose();
   };
 
+  const colorOptions = Object.keys(COLOR_CONFIGS);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-colors duration-300 scale-100 animate-in zoom-in-95 duration-200">
@@ -36,25 +39,72 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, config, onSave, onRes
 
         <div className="overflow-y-auto p-4 space-y-6">
           
-          {/* Names */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 mb-1 uppercase">Player 1 Name</label>
-              <input 
-                type="text" 
-                value={formData.p1Name}
-                onChange={(e) => handleChange('p1Name', e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors"
-              />
+          {/* Players Configuration */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-slate-500 uppercase border-b border-slate-200 dark:border-slate-700 pb-1">Players</h4>
+            
+            {/* Player 1 */}
+            <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Player 1</label>
+                    <div className="flex gap-1">
+                        {colorOptions.map(c => (
+                            <button 
+                                key={c} 
+                                onClick={() => handleChange('p1Color', c)}
+                                className={`w-4 h-4 rounded-full ${COLOR_CONFIGS[c].dot} ${formData.p1Color === c ? 'ring-2 ring-offset-1 ring-slate-400 dark:ring-slate-500' : 'opacity-40 hover:opacity-100'}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+                <input 
+                    type="text" 
+                    placeholder="Name"
+                    value={formData.p1Name}
+                    onChange={(e) => handleChange('p1Name', e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors"
+                />
+                {formData.mode === 'doubles' && (
+                    <input 
+                        type="text" 
+                        placeholder="Partner Name"
+                        value={formData.p1PartnerName || ''}
+                        onChange={(e) => handleChange('p1PartnerName', e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-blue-500 outline-none transition-colors text-sm"
+                    />
+                )}
             </div>
-            <div>
-              <label className="block text-xs font-bold text-red-600 dark:text-red-400 mb-1 uppercase">Player 2 Name</label>
-              <input 
-                type="text" 
-                value={formData.p2Name}
-                onChange={(e) => handleChange('p2Name', e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-red-500 outline-none transition-colors"
-              />
+
+            {/* Player 2 */}
+            <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Player 2</label>
+                    <div className="flex gap-1">
+                        {colorOptions.map(c => (
+                            <button 
+                                key={c} 
+                                onClick={() => handleChange('p2Color', c)}
+                                className={`w-4 h-4 rounded-full ${COLOR_CONFIGS[c].dot} ${formData.p2Color === c ? 'ring-2 ring-offset-1 ring-slate-400 dark:ring-slate-500' : 'opacity-40 hover:opacity-100'}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+                <input 
+                    type="text" 
+                    placeholder="Name"
+                    value={formData.p2Name}
+                    onChange={(e) => handleChange('p2Name', e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-red-500 outline-none transition-colors"
+                />
+                {formData.mode === 'doubles' && (
+                    <input 
+                        type="text" 
+                        placeholder="Partner Name"
+                        value={formData.p2PartnerName || ''}
+                        onChange={(e) => handleChange('p2PartnerName', e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded p-2 text-slate-900 dark:text-white focus:border-red-500 outline-none transition-colors text-sm"
+                    />
+                )}
             </div>
           </div>
 
