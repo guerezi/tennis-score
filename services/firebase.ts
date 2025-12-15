@@ -4,7 +4,9 @@ import {
   getFirestore,
   collection,
   doc,
+  getDoc,
   setDoc,
+  deleteDoc,
   onSnapshot,
   query,
   orderBy,
@@ -193,4 +195,74 @@ export const endMatchInFirestore = async (topicId: string, matchId: string) => {
     },
     { merge: true }
   );
+};
+
+export const deleteMatchFromFirestore = async (
+  topicId: string,
+  matchId: string
+) => {
+  if (!topicId || !matchId) return;
+  const summaryRef = doc(db, `clubs/${topicId}/active_matches/${matchId}`);
+  await deleteDoc(summaryRef);
+};
+
+export const fetchFullMatchState = async (
+  topicId: string,
+  matchId: string
+): Promise<MatchState | null> => {
+  try {
+    const summaryRef = doc(db, `clubs/${topicId}/active_matches/${matchId}`);
+    const realtimeRef = doc(
+      db,
+      `clubs/${topicId}/active_matches/${matchId}/realtime/score`
+    );
+
+    const [summarySnap, realtimeSnap] = await Promise.all([
+      getDoc(summaryRef),
+      getDoc(realtimeRef),
+    ]);
+
+    if (!summarySnap.exists() || !realtimeSnap.exists()) return null;
+
+    const summary = summarySnap.data() as LiveMatchSummary;
+    const realtime = realtimeSnap.data() as RealtimeMatchData;
+
+    // Reconstruct MatchState
+    return {
+      matchId: summary.id,
+      config: summary.config || {
+        // Fallback if config missing
+        p1Name: summary.p1_name,
+        p2Name: summary.p2_name,
+        setsToWin: 2,
+        useAdvantage: true,
+        finalSetType: "standard",
+        tieBreakAt: 6,
+        tieBreakPoints: 7,
+        mode: summary.is_doubles ? "doubles" : "singles",
+      },
+      startTime: summary.startTime || null,
+      durationSeconds: summary.match_duration || 0,
+      isMatchOver: summary.status === "FINISHED",
+
+      currentSetIndex:
+        summary.current_sets.length > 0 ? summary.current_sets.length - 1 : 0,
+      sets: summary.current_sets,
+      games: summary.current_games,
+      points: realtime.current_points,
+
+      isTieBreak: realtime.is_tie_break,
+      server: summary.server,
+      isPaused: summary.isPaused || false,
+
+      history: realtime.history || [],
+
+      // Defaults for transient state
+      isSecondServe: false,
+      shouldSwitchSides: false,
+    };
+  } catch (e) {
+    console.error("Error fetching match state:", e);
+    return null;
+  }
 };

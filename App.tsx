@@ -11,6 +11,7 @@ import { initializeMatch, addPoint, undoPoint } from "./services/tennisLogic";
 import ScoreControls from "./components/ScoreControls";
 import MatchHistory from "./components/MatchHistory";
 import SettingsModal from "./components/SettingsModal";
+import AuthScreen from "./components/AuthScreen";
 import {
   AlertTriangle,
   Trophy,
@@ -26,6 +27,7 @@ import {
   Check,
   Eye,
   WifiOff,
+  Trash2,
 } from "lucide-react";
 import {
   auth,
@@ -34,8 +36,14 @@ import {
   subscribeToMatchRealtime,
   subscribeToMatchSummary,
   endMatchInFirestore,
+  deleteMatchFromFirestore,
+  fetchFullMatchState,
 } from "./services/firebase";
-import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signInAnonymously,
+  User as FirebaseUser,
+} from "firebase/auth";
 
 const App: React.FC = () => {
   const [matchState, setMatchState] = useState<MatchState>(() =>
@@ -44,11 +52,12 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
 
   // --- STATE for Topic/Club & Navigation ---
   const [topic, setTopic] = useState<string>("");
   const [view, setView] = useState<
-    "landing" | "dashboard" | "setup" | "match" | "spectate"
+    "landing" | "dashboard" | "setup" | "match" | "spectate" | "auth"
   >("landing");
 
   // Spectator State
@@ -58,6 +67,7 @@ const App: React.FC = () => {
   // --- AUTH EFFECT ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
       if (user) {
         setAuthUserId(user.uid);
       } else {
@@ -186,7 +196,17 @@ const App: React.FC = () => {
     }
   };
 
-  const handleWatchMatch = (match: LiveMatchSummary) => {
+  const handleWatchMatch = async (match: LiveMatchSummary) => {
+    // If user is the creator, try to resume the match
+    if (authUserId && match.creator_uid === authUserId && topic !== "offline") {
+      const fullState = await fetchFullMatchState(topic, match.id);
+      if (fullState) {
+        setMatchState(fullState);
+        setView("match");
+        return;
+      }
+    }
+    // Otherwise, spectate
     setSpectatingMatch(match);
     setView("spectate");
   };
@@ -216,7 +236,12 @@ const App: React.FC = () => {
 
   if (view === "landing") {
     return (
-      <LandingScreen onConnect={handleConnect} onOffline={handleOffline} />
+      <LandingScreen
+        onConnect={handleConnect}
+        onOffline={handleOffline}
+        onAuth={() => setView("auth")}
+        user={currentUser}
+      />
     );
   }
 
@@ -227,6 +252,17 @@ const App: React.FC = () => {
         onStartMatch={handleStartSetup}
         onWatchMatch={handleWatchMatch}
         authUserId={authUserId}
+        onAuth={() => setView("auth")}
+        user={currentUser}
+      />
+    );
+  }
+
+  if (view === "auth") {
+    return (
+      <AuthScreen
+        onBack={() => setView(topic ? "dashboard" : "landing")}
+        user={currentUser}
       />
     );
   }
@@ -335,9 +371,13 @@ const App: React.FC = () => {
 const LandingScreen = ({
   onConnect,
   onOffline,
+  onAuth,
+  user,
 }: {
   onConnect: (t: string) => void;
   onOffline: () => void;
+  onAuth: () => void;
+  user: FirebaseUser | null;
 }) => {
   const [val, setVal] = useState("");
   const [recents, setRecents] = useState<string[]>([]);
@@ -350,7 +390,20 @@ const LandingScreen = ({
   }, []);
 
   return (
-    <div className="h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 pb-safe">
+    <div className="h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 pb-safe relative">
+      <button
+        onClick={onAuth}
+        className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+      >
+        {user && !user.isAnonymous ? (
+          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+            {user.email?.charAt(0).toUpperCase()}
+          </div>
+        ) : (
+          <User size={24} />
+        )}
+      </button>
+
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-3xl shadow-xl shadow-blue-500/20 mb-6">
@@ -440,11 +493,15 @@ const ClubDashboard = ({
   onStartMatch,
   onWatchMatch,
   authUserId,
+  onAuth,
+  user,
 }: {
   topic: string;
   onStartMatch: () => void;
   onWatchMatch: (m: LiveMatchSummary) => void;
   authUserId: string | null;
+  onAuth: () => void;
+  user: FirebaseUser | null;
 }) => {
   const [matches, setMatches] = useState<LiveMatchSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -518,12 +575,26 @@ const ClubDashboard = ({
               </p>
             )}
           </div>
-          <button
-            onClick={onStartMatch}
-            className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold shadow-md flex items-center gap-2 text-sm active:scale-[0.96] transition-transform"
-          >
-            <Plus size={16} /> New Match
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onAuth}
+              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+            >
+              {user && !user.isAnonymous ? (
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                  {user.email?.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <User size={20} />
+              )}
+            </button>
+            <button
+              onClick={onStartMatch}
+              className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg font-bold shadow-md flex items-center gap-2 text-sm active:scale-[0.96] transition-transform"
+            >
+              <Plus size={16} /> New Match
+            </button>
+          </div>
         </div>
       </div>
 
@@ -580,8 +651,28 @@ const ClubDashboard = ({
                       {m.is_doubles ? "Doubles" : "Singles"}
                     </div>
                   </div>
-                  <div className="font-mono font-bold text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                    {formatTime(m.match_duration || 0)}
+                  <div className="flex items-center gap-2">
+                    <div className="font-mono font-bold text-slate-500 dark:text-slate-400 text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                      {formatTime(m.match_duration || 0)}
+                    </div>
+                    {authUserId && m.creator_uid === authUserId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            window.confirm(
+                              "Are you sure you want to delete this match?"
+                            )
+                          ) {
+                            deleteMatchFromFirestore(topic, m.id);
+                          }
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                        title="Delete Match"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
